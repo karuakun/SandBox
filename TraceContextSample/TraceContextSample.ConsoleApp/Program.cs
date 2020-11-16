@@ -1,11 +1,9 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using System.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
-using Serilog.Events;
-using Serilog.Sinks.SystemConsole.Themes;
 using System.Threading.Tasks;
 using Serilog.Formatting.Json;
-using TraceContextSample.Net;
 using TraceContextSample.Net.Clients;
 
 namespace TraceContextSample.ConsoleApp
@@ -14,6 +12,8 @@ namespace TraceContextSample.ConsoleApp
     {
         static async Task Main(string[] args)
         {
+            Activity.DefaultIdFormat = ActivityIdFormat.W3C;
+
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Information()
                 .Enrich.FromLogContext()
