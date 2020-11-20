@@ -1,4 +1,6 @@
-﻿namespace TraceContextSample.Constants
+﻿using System.Collections.Generic;
+
+namespace TraceContextSample.Constants
 {
     public class Authority
     {
@@ -32,5 +34,35 @@
     {
         public const string BaseUri = "https://localhost:5051";
         public const string ResourceName = "backend3";
+    }
+    public class WebApp
+    {
+        public const string BaseUri = "https://localhost:5061";
+        public const string ClientId = "web_client";
+        public const string ClientSecret = "web_client_secret";
+
+        public static readonly IEnumerable<string> Scopes = new[]
+        {
+            "openid", "profile", "offline_access", "email", Bff.ResourceName
+        };
+        public static readonly IEnumerable<string> RedirectUris = new[] {
+            "https://localhost:5061/signin-oidc",
+            "http://localhost:5060/signin-oidc",
+        };
+    }
+    public class WebApp2
+    {
+        public const string BaseUri = "https://localhost:5071";
+        public const string ClientId = "web_client2";
+        public const string ClientSecret = "web_client2_secret";
+
+        public static readonly IEnumerable<string> Scopes = new[]
+        {
+            "openid", "profile", "offline_access", "email"
+        };
+        public static readonly IEnumerable<string> RedirectUris = new[] {
+            "https://localhost:5071/signin-oidc",
+            "http://localhost:5070/signin-oidc",
+        };
     }
 }
