@@ -2,7 +2,10 @@ using System;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using Serilog;
+using Serilog.Formatting.Json;
 using TraceContextSample.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using TraceContextSample.Web.Enrichers;
 
 namespace TraceContextSample.WebApp
 {
@@ -10,9 +13,11 @@ namespace TraceContextSample.WebApp
     {
         public static int Main(string[] args)
         {
-            Log.Logger = LoggerConfigurationFactory
-                .CreateWebSiteDefaultLoggerConfiguration()
-                .CreateLogger();
+            //Log.Logger = new LoggerConfiguration()
+            //    .MinimumLevel.Information()
+            //    .Enrich.FromLogContext()
+            //    .WriteTo.Console(formatter: new JsonFormatter())
+            //    .CreateLogger();
             try
             {
                 Log.Information("Starting host...");
@@ -33,7 +38,15 @@ namespace TraceContextSample.WebApp
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
-                .UseSerilog()
+                .UseSerilog(
+                    (context, services, configuration) =>
+                    configuration.
+                        MinimumLevel.Information()
+                        .Enrich.FromLogContext()
+                        .Enrich.With(services.GetService<ClaimsEnricher>())
+                        .WriteTo.Console(formatter: new JsonFormatter())
+
+                    )
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.UseStartup<Startup>();

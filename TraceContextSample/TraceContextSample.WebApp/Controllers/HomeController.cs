@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using TraceContextSample.Net.Clients;
+using TraceContextSample.Web.Filters;
 using TraceContextSample.WebApp.Models;
 
 namespace TraceContextSample.WebApp.Controllers
@@ -33,7 +34,8 @@ namespace TraceContextSample.WebApp.Controllers
         }
         
         [Authorize]
-        public async Task<IActionResult> Api()
+        [ClaimsLogFilter]
+        public async Task<IActionResult> Secret()
         {
             var token = await _tokenClient.RequestTokenAsync(new TokenSettings {AuthorityBaseUri = Constants.Authority.BaseUri},
                 Constants.WebApp.ClientId,

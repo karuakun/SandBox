@@ -9,7 +9,7 @@ namespace TraceContextSample.Backend1
     {
         public static void Main(string[] args)
         {
-            Log.Logger = LoggerConfigurationFactory
+            Log.Logger = new LoggerConfiguration()
                 .CreateWebApiDefaultLoggerConfiguration()
                 .CreateLogger();
 

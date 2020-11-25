@@ -118,7 +118,7 @@ namespace TraceContextSample.Auth
             new List<TestUser>
             {
                 new TestUser
-                {
+                {  
                     Username = "test@test.local",
                     SubjectId = "test@test.local",
                     Password = "test",

@@ -9,7 +9,7 @@ namespace TraceContextSample.Bff
     {
         public static void Main(string[] args)
         {
-            Log.Logger = LoggerConfigurationFactory
+            Log.Logger = new LoggerConfiguration()
                 .CreateWebApiDefaultLoggerConfiguration()
                 .CreateLogger();
             CreateHostBuilder(args).Build().Run();

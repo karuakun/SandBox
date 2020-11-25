@@ -1,10 +1,13 @@
 using System;
+using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using TraceContextSample.Net.Clients;
+using TraceContextSample.Web.Enrichers;
+using TraceContextSample.Web.Middlewares;
 
 namespace TraceContextSample.WebApp
 {
@@ -20,11 +23,15 @@ namespace TraceContextSample.WebApp
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddTransient<ClaimsEnricher>();
+            services.AddHttpContextAccessor();
+
             services.AddHttpClient<ITokenClient, TokenClient>();
             services.AddHttpClient<IBffClient, BffClient>();
 
             services.AddControllersWithViews();
 
+            JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
             services.AddAuthentication(options =>
                 {
                     options.DefaultScheme = "Cookies";
@@ -67,6 +74,7 @@ namespace TraceContextSample.WebApp
                 // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
                 app.UseHsts();
             }
+
             app.UseHttpsRedirection();
             app.UseStaticFiles();
 
@@ -75,6 +83,8 @@ namespace TraceContextSample.WebApp
             app.UseAuthentication();
             app.UseAuthorization();
             app.UseCookiePolicy();
+
+            // app.UseMiddleware<ClaimsLoggingMiddleware>();
 
             app.UseEndpoints(endpoints =>
             {

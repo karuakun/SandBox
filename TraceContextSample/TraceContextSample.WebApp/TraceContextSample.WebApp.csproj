@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TraceContextSample.Core\TraceContextSample.csproj" />
+    <ProjectReference Include="..\TraceContextSample.Web\TraceContextSample.Web.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,15 +1,14 @@
 ﻿using Serilog;
 using Serilog.Events;
-using Serilog.Formatting.Json;
 using Serilog.Sinks.SystemConsole.Themes;
 
 namespace TraceContextSample.Logging
 {
-    public class LoggerConfigurationFactory
+    public static class LoggerConfigurationExtensions
     {
-        public static LoggerConfiguration CreateWebSiteDefaultLoggerConfiguration()
+        public static LoggerConfiguration CreateWebSiteDefaultLoggerConfiguration(this LoggerConfiguration loggerConfiguration)
         {
-            return new LoggerConfiguration()
+            return loggerConfiguration
                     .MinimumLevel.Information()
                     .Enrich.FromLogContext()
                     //.WriteTo.Console(formatter: new JsonFormatter())
@@ -19,9 +18,9 @@ namespace TraceContextSample.Logging
                         theme: AnsiConsoleTheme.Code)
                 ;
         }
-        public static LoggerConfiguration CreateWebApiDefaultLoggerConfiguration()
+        public static LoggerConfiguration CreateWebApiDefaultLoggerConfiguration(this LoggerConfiguration loggerConfiguration)
         {
-            return new LoggerConfiguration()
+            return loggerConfiguration
                     .MinimumLevel.Warning()
                     .MinimumLevel.Override("Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker", LogEventLevel.Information)
                     .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Information)

@@ -2,6 +2,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Serilog;
+using Serilog.Context;
 using TraceContextSample.WebApp2.Models;
 
 namespace TraceContextSample.WebApp2.Controllers
@@ -17,6 +19,11 @@ namespace TraceContextSample.WebApp2.Controllers
 
         public IActionResult Index()
         {
+            using (LogContext.PushProperty("prop1", "ほげ"))
+            using (LogContext.PushProperty("prop2", "ほげほげ"))
+            {
+                Log.Information("ログだよー");
+            }
             return View();
         }
 

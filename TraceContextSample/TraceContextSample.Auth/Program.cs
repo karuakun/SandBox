@@ -10,7 +10,7 @@ namespace TraceContextSample.Auth
     {
         public static int Main(string[] args)
         {
-            Log.Logger = LoggerConfigurationFactory
+            Log.Logger = new LoggerConfiguration()
                 .CreateWebSiteDefaultLoggerConfiguration()
                 .CreateLogger();
 
