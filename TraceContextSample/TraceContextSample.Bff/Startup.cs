@@ -53,6 +53,14 @@ namespace TraceContextSample.Bff
                 });
             });
 
+            services.AddCors(options =>
+                options.AddPolicy("AllowAnyOrigin", 
+                    builder => builder
+                        .AllowAnyOrigin()
+                        .AllowAnyMethod()
+                        .AllowAnyHeader()
+                    ));
+
             services.AddSwaggerDocument();
         }
 
@@ -66,6 +74,8 @@ namespace TraceContextSample.Bff
             app.UseHttpsRedirection();
 
             app.UseRouting();
+
+            app.UseCors("AllowAnyOrigin");
 
             app.UseAuthentication();
             app.UseAuthorization();

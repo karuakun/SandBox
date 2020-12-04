@@ -1,11 +1,12 @@
 using System;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Formatting.Json;
 using TraceContextSample.Logging;
 using Microsoft.Extensions.DependencyInjection;
-using TraceContextSample.Web.Enrichers;
+using Serilog.Enrichers.Claim;
 
 namespace TraceContextSample.WebApp
 {
@@ -43,7 +44,8 @@ namespace TraceContextSample.WebApp
                     configuration.
                         MinimumLevel.Information()
                         .Enrich.FromLogContext()
-                        .Enrich.With(services.GetService<ClaimsEnricher>())
+                        .Enrich.WithClaim(services.GetService<IHttpContextAccessor>(), 
+                            "sub", "scope", "exp")
                         .WriteTo.Console(formatter: new JsonFormatter())
 
                     )

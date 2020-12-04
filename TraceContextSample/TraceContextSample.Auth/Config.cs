@@ -111,6 +111,20 @@ namespace TraceContextSample.Auth
                         Constants.WebApp2.BaseUri ,
                     },
                     RedirectUris = Constants.WebApp2.RedirectUris.ToList(),
+                },
+                new Client
+                {
+                    ClientId = Constants.Js.ClientId,
+                    AllowedGrantTypes = GrantTypes.Implicit,
+                    RequireClientSecret = false,
+                    AllowAccessTokensViaBrowser = true,
+                    AllowedScopes = Constants.Js.Scopes.ToList(),
+                    AllowedCorsOrigins = new[]
+                    {
+                        Constants.Js.BaseUri
+                    },
+                    RedirectUris = Constants.Js.RedirectUris.ToList(),
+                    PostLogoutRedirectUris = Constants.Js.PostLogoutRedirectUris.ToList(),
                 }
             };
 

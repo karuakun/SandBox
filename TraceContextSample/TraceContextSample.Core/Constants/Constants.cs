@@ -65,4 +65,26 @@ namespace TraceContextSample.Constants
             "http://localhost:5070/signin-oidc",
         };
     }
+
+    public class Js
+    {
+        public const string BaseUri = "https://localhost:5081";
+        public const string ClientId = "js_implicit_client";
+        public static readonly IEnumerable<string> Scopes = new[]
+        {
+            "openid", "profile", "offline_access", "email", Bff.ResourceName
+        };
+        public static readonly IEnumerable<string> RedirectUris = new[] {
+            "https://localhost:5081/callback.html",
+            "https://localhost:5081/silent.html",
+            "http://localhost:5080/callback.html",
+            "http://localhost:5080/silent.html"
+        };
+
+        public static readonly IEnumerable<string> PostLogoutRedirectUris = new[]
+        {
+            "https://localhost:5081/index.html",
+            "http://localhost:5080/index.html"
+        };
+    }
 }
