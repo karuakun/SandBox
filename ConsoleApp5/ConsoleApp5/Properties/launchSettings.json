@@ -1,0 +1,15 @@
+{
+  "profiles": {
+    "ConsoleApp5": {
+      "commandName": "Project"
+    },
+    "Docker": {
+      "commandName": "Docker",
+      "environmentVariables": {
+        "TARGET": "https://www.e-reverse.com/",
+        "INCLUDE": "e-reverse.com",
+        "EXCLUDE": "cms/,/wp-json/"
+      }
+    }
+  }
+}
