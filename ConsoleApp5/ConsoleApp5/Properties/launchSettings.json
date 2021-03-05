@@ -6,9 +6,9 @@
     "Docker": {
       "commandName": "Docker",
       "environmentVariables": {
-        "TARGET": "https://www.e-reverse.com/",
-        "INCLUDE": "e-reverse.com",
-        "EXCLUDE": "cms/,/wp-json/"
+        "INCLUDE_REQUEST_STRINGS": "karuakun.wordpress.com",
+        "TARGET": "https://karuakun.wordpress.com/",
+        "EXCLUDE_REQUEST_STRINGS": "dummy"
       }
     }
   }

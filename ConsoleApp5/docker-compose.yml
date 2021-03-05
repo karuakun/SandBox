@@ -4,7 +4,3 @@ services:
     build:
       context: .
       dockerfile: ConsoleApp5/Dockerfile
-    environment: 
-      - TARGET=https://www.e-reverse.com/
-      - INCLUDE=e-reverse.com
-      - EXCLUDE=/cms/,/wp-json/
