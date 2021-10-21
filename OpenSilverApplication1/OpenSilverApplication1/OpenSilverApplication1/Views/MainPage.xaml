@@ -1,0 +1,23 @@
+﻿<Page
+    x:Class="OpenSilverApplication1.Views.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="clr-namespace:OpenSilverApplication1.ViewModels"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    viewModels:ViewModelLocator.AutoWireViewModel="True"
+    mc:Ignorable="d">
+
+    <StackPanel>
+<!--        <TextBox Text="{Binding Counter, Mode=TwoWay}"/>
+        <Button
+            Content="Click me!"
+            Command="{Binding IncrementCounterCommand}"/>
+-->        
+        <Button
+            Content="東京の天気を取得"
+            Command="{Binding GetWeatherCommand}"/>
+        <TextBlock Text="{Binding Weather}" />
+
+    </StackPanel>
+</Page>
