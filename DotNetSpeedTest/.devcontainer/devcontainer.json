@@ -1,0 +1,14 @@
+{
+    "name": "C# (.NET)",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-dotnettools.csharp"
+            ]
+        }
+    },
+    "remoteUser": "vscode"
+}
