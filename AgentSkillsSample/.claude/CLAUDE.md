@@ -29,6 +29,15 @@ src/AgentSkillsSample.WebApi/
 docs/           Architecture documentation
 ```
 
+## Documentation (`docs/`)
+
+| File | Read when... |
+|---|---|
+| `architecture.md` | 全体構成・依存関係・ファイル構成を把握したいとき |
+| `agents.md` | オーケストレーションフロー・スキルロード手順・モデル解決の優先順位を確認したいとき |
+| `database.md` | DBスキーマ・シードデータ・スキルの追加方法を確認したいとき |
+| `api.md` | SSEフォーマット・再接続フロー・curl例を確認したいとき |
+
 ## Key Conventions
 
 - **DB-driven skills**: Skills and agent system prompts live in `skills.db` (SQLite). Add/modify skills via SQL without restarting.
