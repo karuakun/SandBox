@@ -1,6 +1,14 @@
 # AgentSkillsSample
 
-Supervisor + Sub-agent sample using Microsoft.AgentFramework + AWS Bedrock (Claude).
+**Stack**: C# / ASP.NET Core (.NET 10) / Microsoft.AgentFramework / AWS Bedrock (Claude LLMs via `Anthropic.Bedrock`)  
+→ See `docs/architecture.md` for full component and dependency details.
+
+## Coding Standards
+
+Follow **Microsoft C# coding conventions**, **SOLID principles**, and **Clean Architecture**:
+- Depend on abstractions (interfaces), not concretions
+- Keep layers separate: Agents → Skills → Data; no upward dependencies
+- Prefer composition and DI over inheritance and statics
 
 ## Build & Run
 
