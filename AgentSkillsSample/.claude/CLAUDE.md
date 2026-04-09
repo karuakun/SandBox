@@ -33,10 +33,10 @@ docs/           Architecture documentation
 
 | File | Read when... |
 |---|---|
-| `architecture.md` | 全体構成・依存関係・ファイル構成を把握したいとき |
-| `agents.md` | オーケストレーションフロー・スキルロード手順・モデル解決の優先順位を確認したいとき |
-| `database.md` | DBスキーマ・シードデータ・スキルの追加方法を確認したいとき |
-| `api.md` | SSEフォーマット・再接続フロー・curl例を確認したいとき |
+| `architecture.md` | Understanding overall structure, dependency graph, or file layout |
+| `agents.md` | Tracing the orchestration loop, skill-load flow, or model resolution order |
+| `database.md` | Checking DB schema, seed data, or how to add/modify skills at runtime |
+| `api.md` | Looking up SSE format, reconnection flow, or curl examples |
 
 ## Key Conventions
 
