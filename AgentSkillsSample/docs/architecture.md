@@ -153,14 +153,21 @@ AgentSkillsSample/
 }
 ```
 
-### 認証（環境変数）
+### 認証（AWS IAM Identity Center / SSO）
 
-AWS 認証情報はアプリケーション設定には含めず、環境変数で渡します:
+AWS 認証は IAM Identity Center（旧 AWS SSO）の `ct-dxai-dev` プロファイルを使用します。
+appsettings に認証情報は記載しません。
 
 ```bash
-AWS_ACCESS_KEY_ID=<key>
-AWS_SECRET_ACCESS_KEY=<secret>
-AWS_DEFAULT_REGION=us-east-1
+# 初回セットアップ（一度だけ）
+aws configure sso
+# SSO start URL / Region / アカウント / ロールを入力し、プロファイル名に ct-dxai-dev を設定
+
+# アプリ起動前にサインイン
+aws sso login --profile ct-dxai-dev
+
+# プロファイルを指定して起動
+AWS_PROFILE=ct-dxai-dev dotnet run
 ```
 
-`AnthropicBedrockCredentialsHelper.FromEnv()` が起動時に読み込みます。
+`AnthropicBedrockCredentialsHelper.FromEnv()` は `AWS_PROFILE` 環境変数経由で SSO 認証情報を自動解決します。

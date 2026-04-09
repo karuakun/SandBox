@@ -12,17 +12,17 @@ Follow **Microsoft C# coding conventions**, **SOLID principles**, and **Clean Ar
 
 ## Build & Run
 
-```bash
-cd src/AgentSkillsSample.WebApi
-dotnet build
-dotnet run
-```
+AWS auth uses **IAM Identity Center (SSO)** with profile `ct-dxai-dev`:
 
-Required env vars:
-```
-AWS_ACCESS_KEY_ID
-AWS_SECRET_ACCESS_KEY
-AWS_DEFAULT_REGION=us-east-1
+```bash
+# Initial setup (once)
+aws configure sso   # profile name: ct-dxai-dev
+
+# Login before running the app
+aws sso login --profile ct-dxai-dev
+
+cd src/AgentSkillsSample.WebApi
+AWS_PROFILE=ct-dxai-dev dotnet run
 ```
 
 ## Project Layout
