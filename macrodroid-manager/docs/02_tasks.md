@@ -1,6 +1,6 @@
 # MacroDroid Automation Manager タスク分割
 
-**バージョン**: 0.2.0  
+**バージョン**: 0.3.0  
 **作成日**: 2026-05-02  
 **更新日**: 2026-05-02  
 **参照**: [仕様書](./01_spec.md)
@@ -11,7 +11,7 @@
 
 ```
 Phase 0: 調査・検証        ✅ T0-3, T0-4 完了。T0-1, T0-2 は実機必須
-Phase 1: 基盤実装          🔄 T1-1〜T1-7 完了。T1-8〜T1-12 追加
+Phase 1: 基盤実装          🔄 T1-1〜T1-7 完了。T1-8〜T1-22 追加（含テスト）
 Phase 2: PC アプリ実装     ⬜ 未着手
 Phase 3: スマホ連携整備    ⬜ 未着手
 Phase 4: ビジュアルエディタ ⬜ 将来タスク（スコープ外）
@@ -220,6 +220,208 @@ tsx tools/create-converter.ts tasker \
 
 ---
 
+---
+
+## Phase 1 テスト: 単体テスト・結合テスト
+
+> **テスト方針**
+> - フレームワーク: **vitest**（ESM ネイティブ・jest 互換 API）
+> - カバレッジ: `@vitest/coverage-v8`（目標: converter 80%+、providers 70%+）
+> - モック: `vi.mock()` / `vi.spyOn()`
+> - テストファイル配置: 各パッケージの `src/__tests__/` ディレクトリ
+> - 命名規則: `*.test.ts`
+
+---
+
+### T1-13: テスト環境セットアップ ⬜
+
+**依存**: なし（T1-13 は他テストタスクすべての前提）
+
+**成果物**:
+- `packages/converter/package.json` に vitest 追加
+- `packages/converter/vitest.config.ts`
+- `packages/providers/vitest.config.ts`
+- ルート `package.json` の `test` / `test:coverage` スクリプト
+
+**設定例**:
+```typescript
+// vitest.config.ts
+export default defineConfig({
+  test: {
+    globals: true,
+    environment: 'node',
+    coverage: { provider: 'v8', reporter: ['text', 'lcov'] },
+  },
+});
+```
+
+**npm スクリプト追加**:
+```json
+"test": "vitest run",
+"test:watch": "vitest",
+"test:coverage": "vitest run --coverage"
+```
+
+---
+
+### T1-14: validator 単体テスト ⬜
+
+**依存**: T1-13、T1-3（実装済み）  
+**成果物**: `packages/converter/src/__tests__/validator.test.ts`
+
+| テストケース | 内容 |
+|------------|------|
+| 正常系: 最小構成 | `time` トリガー + `notification` アクションのみ |
+| 正常系: 全 trigger type | 各 type で valid なシナリオを1ケースずつ |
+| 正常系: 全 action type | `if_else` のネストを含む |
+| 正常系: 全 condition type | |
+| 異常系: 必須フィールド欠如 | `metadata.id` なし、`actions` 空配列など |
+| 異常系: 不正フォーマット | `time: "7:00"`（HH:mm 形式違反）|
+| 異常系: 不正 ID | `id: "Morning Routine"`（スペース含む） |
+| 境界値: if_else の深いネスト | 3段ネストが通ること |
+
+---
+
+### T1-15: yaml-to-mdr 単体テスト ⬜
+
+**依存**: T1-13、T1-4（実装済み）  
+**成果物**: `packages/converter/src/__tests__/yaml-to-mdr.test.ts`
+
+| テストケース | 内容 |
+|------------|------|
+| TimerTrigger 変換 | `time: "07:00"`, `days: [mon, fri]` → `m_hour`, `m_daysOfWeek` |
+| WifiConnectionTrigger 変換 | `wifi_connected` / `wifi_disconnected` の `m_wifiState` 値 |
+| NotificationAction 変換 | `title` / `text` → 推定フィールド名へのマッピング |
+| SetWifiAction 変換 | `state: enable` → `m_state` 整数値 |
+| termux_script 変換 | `⚠️` 箇所が現状の推定値で出力されること（スナップショット） |
+| raw type 透過 | 入力の `rawData` がそのまま出力に含まれること |
+| GUID 生成 | `m_GUID` が毎回異なる整数値であること |
+| カテゴリ抽出 | 複数マクロのカテゴリが `categoryList` に重複なく含まれること |
+
+**スナップショットテスト**: `⚠️` 箇所は T0-1 完了後に正しい値で上書き確認する
+
+---
+
+### T1-16: mdr-to-yaml 単体テスト ⬜
+
+**依存**: T1-13、T1-5（実装済み）  
+**成果物**: `packages/converter/src/__tests__/mdr-to-yaml.test.ts`
+
+| テストケース | 内容 |
+|------------|------|
+| TimerTrigger → `time` | `m_daysOfWeek: [1,2,3,4,5]` → `days: [mon,...,fri]` |
+| ScreenOnOffTrigger → screen_on/off | `m_screenOn` で分岐 |
+| DayOfWeekConstraint → `day_of_week` | インデックス → 曜日文字列 |
+| 未知クラス → `raw` | `m_classType: 'UnknownAction'` → `type: 'raw'` + warnings |
+| warnings 蓄積 | 複数未知クラスが含まれる場合に全件 warnings に記録 |
+| scenarioId がメタデータに反映 | `mdrToScenario(mdr, 'test-id')` → `metadata.id === 'test-id'` |
+
+---
+
+### T1-17: MacroDroidConverter 単体テスト ⬜
+
+**依存**: T1-13、T1-9（未実装）  
+**成果物**: `packages/converter/src/__tests__/converters/macrodroid.test.ts`
+
+| テストケース | 内容 |
+|------------|------|
+| `convert()` 出力形式 | JSZip で開けること（ZIP フォーマット） |
+| `convert()` 内部構造 | ZIP 内に `macros` ファイルが存在し valid JSON であること |
+| `convert()` filename | `{id}_v{version}.mdr` の形式 |
+| `importFrom()` ZIP 入力 | convert() 出力をそのまま渡して Scenario が返ること |
+| `importFrom()` plain JSON 入力 | ZIP でない場合のフォールバック動作 |
+| `importFrom()` 未知クラス | warnings に記録されること |
+
+---
+
+### T1-18: ConverterRegistry 単体テスト ⬜
+
+**依存**: T1-13、T1-8（未実装）  
+**成果物**: `packages/converter/src/__tests__/registry.test.ts`
+
+| テストケース | 内容 |
+|------------|------|
+| `register` / `get` / `list` | 基本的な登録・取得・一覧 |
+| 同一 platformId の上書き | 後から登録したものが優先 |
+| `loadFromDirectory` 正常系 | 有効な変換器クラスをディレクトリからロード |
+| `loadFromDirectory` 不正ファイル | エラーを errors に記録してスキップ |
+| `loadFromDirectory` 存在しないディレクトリ | 例外ではなく空の結果を返す |
+
+---
+
+### T1-19: DropboxProvider 単体テスト ⬜
+
+**依存**: T1-13、T1-7（実装済み）  
+**成果物**: `packages/providers/src/__tests__/dropbox-provider.test.ts`
+
+**モック方針**: `vi.mock('dropbox')` で Dropbox SDK をモック
+
+| テストケース | 内容 |
+|------------|------|
+| `testConnection()` 成功 | `usersGetCurrentAccount` が成功 → `true` |
+| `testConnection()` 失敗 | SDK が throw → `false` |
+| `deployScenario()` 成功 | `filesUpload` が正しいパス・内容で呼ばれること |
+| `deployScenario()` 失敗 | SDK エラー → `DeployResult.success === false` |
+| `deployScript()` パス構築 | `basePath/deploy/scripts/{name}` になること |
+| `listExports()` 一覧取得 | `.mdr` のみフィルタリングされること |
+| `listExports()` API エラー | 例外ではなく空配列を返すこと |
+| `fetchExport()` | `filesDownload` が呼ばれ Buffer が返ること |
+| `deleteExport()` | `filesDeleteV2` が正しいパスで呼ばれること |
+
+---
+
+### T1-20: YAML → .mdr → YAML ラウンドトリップ結合テスト ⬜
+
+**依存**: T1-9（MacroDroidConverter）  
+**成果物**: `packages/converter/src/__tests__/integration/roundtrip.test.ts`
+
+**方針**: 実際の `scenarios/*.yaml` を使ってコンバーターを通した後、
+主要フィールドが元の値と一致することを確認する。
+
+| テストケース | 内容 |
+|------------|------|
+| morning-routine ラウンドトリップ | `scenarios/morning-routine.yaml` 全体 |
+| system-health-check ラウンドトリップ | termux_script を含むシナリオ |
+| id の保持 | `metadata.id` が変換前後で一致 |
+| マクロ数の保持 | `macros.length` が一致 |
+| trigger type の保持 | 各マクロの trigger.type が一致 |
+| action type の保持 | 各アクションの type が一致（raw になっていないこと） |
+
+> **注意**: T0-1 完了前は `termux_script` の逆変換が `raw` になる可能性あり。  
+> その場合はそのまま failing test として残し、T0-1 完了後に修正する。
+
+---
+
+### T1-21: buildScenarios 結合テスト ⬜
+
+**依存**: T1-10（buildScenarios 実装）  
+**成果物**: `packages/converter/src/__tests__/integration/build.test.ts`
+
+**方針**: 一時ディレクトリを使い、実際の YAML ファイルからビルドを実行する。
+
+| テストケース | 内容 |
+|------------|------|
+| 正常ビルド | `scenarios/*.yaml` が全て `dist/macrodroid/` に出力される |
+| 出力ファイル名 | `{id}_v{version}.mdr` 形式であること |
+| バリデーションエラー | 不正な YAML が含まれても他のビルドは続行し errors に記録 |
+| 複数変換器 | MacroDroid + サンプル変換器の両方で出力が生成される |
+| 空の scenariosDir | エラーではなく空の結果が返ること |
+
+---
+
+### T1-22: ConverterRegistry + ユーザー定義変換器 結合テスト ⬜
+
+**依存**: T1-11（ユーザー定義変換器サンプル）  
+**成果物**: `packages/converter/src/__tests__/integration/user-converter.test.ts`
+
+| テストケース | 内容 |
+|------------|------|
+| `converters/example/` の動的ロード | RegistryRegistry に登録されること |
+| サンプル変換器での `convert()` | Scenario を受け取り Buffer を返すこと |
+| 組み込み + ユーザー定義の共存 | `registry.list()` に両方が含まれること |
+
+---
+
 ## Phase 2: PC アプリ実装
 
 ### T2-1: Vite + React + TypeScript + Electron 初期化 ⬜
@@ -352,6 +554,26 @@ PC でビルド・デプロイ → スマホで MacroDroid にマクロが追加
 
 ---
 
+### T3-4: 実機 .mdr ファイルを使った変換テスト ⬜
+
+**依存**: T0-1（実機エクスポート完了後）  
+**成果物**: `packages/converter/src/__tests__/integration/real-mdr.test.ts`
+
+**方針**: T0-1 で取得した実際の .mdr ファイルをテストフィクスチャとして使い、
+変換器の実際の精度を確認する。
+
+| テストケース | 内容 |
+|------------|------|
+| 最小構成 .mdr の importFrom | エラーなしで Scenario が返ること |
+| 全クラス .mdr の importFrom | 各マクロの trigger/action が `raw` でないこと |
+| Termux スクリプト .mdr | `termux_script` type として変換されること（T0-1 確認後） |
+| 変換後の再変換 | importFrom → convert → importFrom で同じ Scenario になること |
+
+**フィクスチャ配置**: `packages/converter/src/__tests__/fixtures/real/`  
+（.mdr ファイルは T0-1 完了後に追加）
+
+---
+
 ## Phase 4: ビジュアルワークフローエディタ（将来）
 
 > **スコープ外**（現フェーズでは実装しない）
@@ -365,74 +587,93 @@ PC でビルド・デプロイ → スマホで MacroDroid にマクロが追加
 ## 実装優先度・依存関係
 
 ```
-T0-1 ─────────────────────────────────────────┐
-T0-2 ──────────────────────────────┐          │
-                                   │          │
-T1-1 ✅                            │          │
-T1-2 ✅                            │          │
-T1-3 ✅                            │          │
-T1-4 ✅ ─────────────────────┐     │          │
-T1-5 ✅                      │     │          │
-T1-6 ✅                      │     │          │
-T1-7 ✅                      │     │          │
-                             │     │          │
-T1-8 ──────────────────────┐ │     │          │
-                           │ │     │          │
-T1-9 (T1-4, T1-5, T1-8)──┐│ │     │          │
-                          ││ │     │          │
-T1-10 (T1-9, T1-8) ─────┐│ │ │     │          │
-T1-11 (T1-8) ───────────┘│ │ │     │          │
-T1-12 (T1-8) ────────────┘ │ │     │          │
-                           │ │     │          │
-                           │ ▼     ▼          ▼
-                           │ T3-2  T3-1    T1-9（修正）
-                           │
-                           ▼
-                          T2-1
-                           │
-                          T2-2
-                           │
-          ┌────────────────┼──────────────────┐
-          ▼                ▼                  ▼
-     T2-3〜T2-7          T2-8               T2-9
-          │                │                  │
-          └────────────────┴────── T2-10 ─────┘
-                                       │
-                                      T3-3
+【凡例】✅=完了  ⬜=未着手  実=実機必須
+
+T0-1（実） ──────────────────────────────────────────────┐
+T0-2（実） ────────────────────────────────┐             │
+                                           │             │
+T1-1 ✅                                    │             │
+T1-2 ✅                                    │             │
+T1-3 ✅ ──────────────────── T1-14         │             │
+T1-4 ✅ ──────────────────── T1-15         │             │
+T1-5 ✅ ──────────────────── T1-16         │             │
+T1-6 ✅                                    │             │
+T1-7 ✅ ──────────────────── T1-19         │             │
+                                           │             │
+T1-13（テスト環境）←─────── T1-14〜T1-22 すべての前提  │
+                                           │             │
+T1-8 ──── T1-18                            │             │
+  │                                        │             │
+T1-9 (T1-4,T1-5,T1-8) ──── T1-17         │             │
+  │            └───────── T1-20（結合）    │             │
+T1-10 (T1-9,T1-8) ──────── T1-21（結合）  │             │
+T1-11 (T1-8) ────────────── T1-22（結合）  │             │
+T1-12 (T1-8)                              │             │
+                                          │             │
+                                          ▼             ▼
+                                   T3-2  T3-1       T3-4（実機テスト）
+                                                        ↑
+                                                    T0-1 完了後
+T1-8〜T1-22 完了
+        │
+       T2-1
+        │
+       T2-2
+        │
+   ┌────┼──────────────────────┐
+   ▼    ▼    ▼    ▼    ▼       ▼
+ T2-3 T2-4 T2-5 T2-6 T2-7   T2-8  T2-9
+   │                           │     │
+   └───────────────────────── T2-10 ─┘
+                                 │
+                                T3-3
 ```
 
 ---
 
 ## 進捗トラッカー
 
-| タスク | ステータス | 担当 | 完了日 |
-|--------|-----------|------|--------|
-| T0-1 | ⬜ 未着手（実機必須） | | |
-| T0-2 | ⬜ 未着手（実機必須） | | |
-| T0-3 | ✅ 完了 | | 2026-05-02 |
-| T0-4 | ✅ 完了 | | 2026-05-02 |
-| T1-1 | ✅ 完了 | | 2026-05-02 |
-| T1-2 | ✅ 完了 | | 2026-05-02 |
-| T1-3 | ✅ 完了 | | 2026-05-02 |
-| T1-4 | ✅ 完了 | | 2026-05-02 |
-| T1-5 | ✅ 完了 | | 2026-05-02 |
-| T1-6 | ✅ 完了 | | 2026-05-02 |
-| T1-7 | ✅ 完了 | | 2026-05-02 |
-| T1-8 | ⬜ 未着手 | | |
-| T1-9 | ⬜ 未着手 | | |
-| T1-10 | ⬜ 未着手 | | |
-| T1-11 | ⬜ 未着手 | | |
-| T1-12 | ⬜ 未着手 | | |
-| T2-1 | ⬜ 未着手 | | |
-| T2-2 | ⬜ 未着手 | | |
-| T2-3 | ⬜ 未着手 | | |
-| T2-4 | ⬜ 未着手 | | |
-| T2-5 | ⬜ 未着手 | | |
-| T2-6 | ⬜ 未着手 | | |
-| T2-7 | ⬜ 未着手 | | |
-| T2-8 | ⬜ 未着手 | | |
-| T2-9 | ⬜ 未着手 | | |
-| T2-10 | ⬜ 未着手 | | |
-| T3-1 | ⬜ 未着手 | | |
-| T3-2 | ⬜ 未着手 | | |
-| T3-3 | ⬜ 未着手 | | |
+> チェックボックス形式の一覧は `STATUS.md` も参照。
+
+| タスク | 種別 | ステータス | 担当 | 完了日 |
+|--------|------|-----------|------|--------|
+| T0-1 | 調査 | ⬜ 未着手（実機必須） | | |
+| T0-2 | 調査 | ⬜ 未着手（実機必須） | | |
+| T0-3 | 決定 | ✅ 完了 | | 2026-05-02 |
+| T0-4 | 決定 | ✅ 完了 | | 2026-05-02 |
+| T1-1 | 実装 | ✅ 完了 | | 2026-05-02 |
+| T1-2 | 実装 | ✅ 完了 | | 2026-05-02 |
+| T1-3 | 実装 | ✅ 完了 | | 2026-05-02 |
+| T1-4 | 実装 | ✅ 完了 | | 2026-05-02 |
+| T1-5 | 実装 | ✅ 完了 | | 2026-05-02 |
+| T1-6 | 実装 | ✅ 完了 | | 2026-05-02 |
+| T1-7 | 実装 | ✅ 完了 | | 2026-05-02 |
+| T1-8 | 実装 | ⬜ 未着手 | | |
+| T1-9 | 実装 | ⬜ 未着手 | | |
+| T1-10 | 実装 | ⬜ 未着手 | | |
+| T1-11 | 実装 | ⬜ 未着手 | | |
+| T1-12 | 実装 | ⬜ 未着手 | | |
+| T1-13 | テスト | ⬜ 未着手 | | |
+| T1-14 | 単体テスト | ⬜ 未着手 | | |
+| T1-15 | 単体テスト | ⬜ 未着手 | | |
+| T1-16 | 単体テスト | ⬜ 未着手 | | |
+| T1-17 | 単体テスト | ⬜ 未着手（T1-9 後） | | |
+| T1-18 | 単体テスト | ⬜ 未着手（T1-8 後） | | |
+| T1-19 | 単体テスト | ⬜ 未着手 | | |
+| T1-20 | 結合テスト | ⬜ 未着手（T1-9 後） | | |
+| T1-21 | 結合テスト | ⬜ 未着手（T1-10 後） | | |
+| T1-22 | 結合テスト | ⬜ 未着手（T1-11 後） | | |
+| T2-1 | 実装 | ⬜ 未着手 | | |
+| T2-2 | 実装 | ⬜ 未着手 | | |
+| T2-3 | 実装 | ⬜ 未着手 | | |
+| T2-4 | 実装 | ⬜ 未着手 | | |
+| T2-5 | 実装 | ⬜ 未着手 | | |
+| T2-6 | 実装 | ⬜ 未着手 | | |
+| T2-7 | 実装 | ⬜ 未着手 | | |
+| T2-8 | 実装 | ⬜ 未着手 | | |
+| T2-9 | 実装 | ⬜ 未着手 | | |
+| T2-10 | 実装 | ⬜ 未着手 | | |
+| T3-1 | ドキュメント | ⬜ 未着手 | | |
+| T3-2 | 実装 | ⬜ 未着手 | | |
+| T3-3 | E2E テスト | ⬜ 未着手 | | |
+| T3-4 | 実機テスト | ⬜ 未着手（T0-1 後） | | |
