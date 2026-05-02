@@ -1,0 +1,52 @@
+apiVersion: macrodroid/v1
+kind: Scenario
+metadata:
+  id: system-health-check
+  name: システムヘルスチェック
+  description: 毎朝Termuxスクリプトでシステム状態を確認し、異常時に通知する
+  tags:
+    - system
+    - monitoring
+  version: 1
+  createdAt: 2026-05-02
+  updatedAt: 2026-05-02
+
+macros:
+  - id: daily-health-check
+    name: 日次ヘルスチェック
+    enabled: true
+    category: システム監視
+    trigger:
+      type: time
+      config:
+        time: "09:00"
+    actions:
+      - type: termux_script
+        config:
+          script: scripts/health_check.sh
+          args: "--verbose"
+          wait_for_result: true
+          timeout_sec: 60
+      - type: if_else
+        config:
+          condition:
+            type: variable
+            config:
+              name: termux_exit_code
+              operator: eq
+              value: "0"
+          then_actions:
+            - type: toast
+              config:
+                text: "ヘルスチェック完了: 正常"
+          else_actions:
+            - type: notification
+              config:
+                title: "ヘルスチェック異常"
+                text: "スクリプトがエラーで終了しました"
+                priority: high
+            - type: http_request
+              config:
+                method: POST
+                url: "https://example.com/webhook/alert"
+                body: '{"status": "error", "macro": "health-check"}'

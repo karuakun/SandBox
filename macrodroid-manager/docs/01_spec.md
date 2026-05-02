@@ -1,8 +1,9 @@
 # MacroDroid Automation Manager 仕様書
 
-**バージョン**: 0.1.0  
+**バージョン**: 0.2.0  
 **作成日**: 2026-05-02  
-**ステータス**: 草稿
+**更新日**: 2026-05-02  
+**ステータス**: 確定（主要決定事項を反映）
 
 ---
 
@@ -524,17 +525,21 @@ MacroDroid の .mdr ファイルは **ZIP アーカイブ**で、内部に `macr
 
 | # | 事項 | 優先度 | 対応方針 |
 |---|------|--------|----------|
-| 1 | MacroDroid .mdr の正確な内部フォーマット | 高 | 実装初期に既存マクロを複数エクスポートして解析 |
-| 2 | MacroDroid でのプログラム的マクロインポート手段 | 高 | `android.intent.action.VIEW` で .mdr を開けるか検証 |
-| 3 | Electron vs Web アプリの選択 | 中 | ローカル Git 操作の必要性から Electron を推奨 |
-| 4 | クラウドストレージ優先実装先（Dropbox / Google Drive） | 中 | Dropbox API の方がシンプルなため Dropbox を先行 |
-| 5 | Termux スクリプトのデプロイ先パス権限 | 低 | テスト時に確認 |
+| 1 | MacroDroid .mdr の正確な内部フォーマット（フィールド名・Termux アクション） | 高 | T0-1: 実機エクスポートで確認（`docs/03_mdr_format.md` に検証チェックリスト記載） |
+| 2 | MacroDroid でのプログラム的マクロインポート手段 | 高 | T0-2: `android.intent.action.VIEW` で .mdr を開けるか検証 |
+| 3 | Termux スクリプトのデプロイ先パス権限 | 低 | テスト時に確認 |
 
 ---
 
-## 11. 未決定事項
+## 11. 確定事項
 
-- [ ] Electron vs Web (ブラウザ) の選択
-- [ ] 初期対応クラウドストレージ（Dropbox 推奨）
-- [ ] マクロの命名規則・ID 採番方針
-- [ ] YAML バリデーションの厳格度（未知の type を許容するか）
+| 項目 | 決定内容 | 決定日 |
+|------|---------|--------|
+| PC アプリ形態 | **Electron**（electron-vite + React） | 2026-05-02 |
+| 初期 DeployProvider | **Dropbox**（Dropbox SDK for JavaScript） | 2026-05-02 |
+| .mdr フォーマット（既知部分） | JSON + `m_classType` によるクラス識別。詳細は `docs/03_mdr_format.md` 参照 | 2026-05-02 |
+
+## 12. 未決定事項
+
+- [ ] マクロの `m_GUID` 採番方針（整数乱数 vs タイムスタンプ）
+- [ ] YAML バリデーションの厳格度（未知の `type` を警告のみにするか、エラーにするか）
