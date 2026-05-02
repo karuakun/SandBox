@@ -1,9 +1,9 @@
 # MacroDroid Automation Manager 仕様書
 
-**バージョン**: 0.2.0  
+**バージョン**: 0.3.0  
 **作成日**: 2026-05-02  
 **更新日**: 2026-05-02  
-**ステータス**: 確定（主要決定事項を反映）
+**ステータス**: 確定（変換器抽象化・dist管理・AI生成ツールを追加）
 
 ---
 
@@ -19,18 +19,20 @@ Android の自動化アプリ MacroDroid の自動化タスク（マクロ）を
 
 | 機能 | 説明 |
 |------|------|
-| シナリオ定義 | YAML で MacroDroid マクロ群を定義 |
+| シナリオ定義 | YAML でプラットフォーム非依存のマクロ群を定義 |
 | シナリオ管理 | 一覧表示・追加・編集・削除（PC 管理画面） |
 | スクリプト管理 | Termux スクリプトを Git で一元管理 |
-| デプロイ | YAML → MacroDroid 取り込み形式に変換してスマホへ配信 |
+| 変換成果物管理 | YAML → 各プラットフォーム形式に変換した成果物を `dist/` で Git 管理 |
+| デプロイ | `dist/` の変換済みファイルをスマホへ配信（DeployProvider 経由） |
 | エクスポート | スマホ上の既存マクロを PC 側の YAML に取り込む |
-| バージョン管理 | シナリオ・スクリプトを Git で管理 |
+| 変換器拡張 | `PlatformConverter` インターフェースを実装してプラットフォームを追加 |
+| ユーザー定義変換器 | `converters/` ディレクトリに置くだけで動的にロード |
+| AI 変換器生成 | Claude API を使った変換器コード生成ツール |
 
 **スコープ外（将来タスク）**
 
 - ビジュアルワークフローエディタ（GUI でのフロー作成）
 - 複数端末の同時管理
-- MacroDroid 以外の自動化アプリ対応
 
 ### 1.3 前提条件
 
@@ -103,16 +105,105 @@ Android の自動化アプリ MacroDroid の自動化タスク（マクロ）を
 
 | コンポーネント | 役割 | 技術 |
 |----------------|------|------|
-| Manager App | PC 側管理 UI | TypeScript / React |
-| YAML Converter | YAML ↔ MacroDroid 形式変換 | TypeScript |
-| Deploy Provider | デプロイ方式の抽象インターフェース | TypeScript |
-| CloudStorage Provider | クラウドストレージへのファイル操作 | Dropbox API / Google Drive API |
+| Manager App | PC 側管理 UI | TypeScript / React / Electron |
+| PlatformConverter | YAML → プラットフォーム形式変換の抽象 | TypeScript Interface |
+| MacroDroidConverter | MacroDroid 組み込みコンバーター | TypeScript |
+| ConverterRegistry | 変換器の登録・動的ロード管理 | TypeScript |
+| build:scenarios | YAML → dist/ 変換バッチコマンド | Node.js script |
+| create-converter | Claude API による変換器コード生成 | Anthropic SDK |
+| Deploy Provider | デプロイ方式の抽象インターフェース | TypeScript Interface |
+| DropboxProvider | Dropbox へのファイル操作 | Dropbox SDK |
 | Receiver Macro | スマホ側のファイル監視・インポート起動 | MacroDroid |
 | Script Installer | Termux スクリプト配置 | MacroDroid + Shell |
 
 ---
 
-## 3. デプロイ抽象化設計
+## 3. 変換器抽象化設計（PlatformConverter）
+
+YAML シナリオから各プラットフォーム固有形式への変換を抽象化する。
+MacroDroid 以外のプラットフォーム（Tasker 等）への対応をインターフェース実装で追加できる。
+
+### 3.1 PlatformConverter インターフェース
+
+```typescript
+interface PlatformConverter {
+  readonly platformId: string;       // 'macrodroid', 'tasker', 'automate'
+  readonly displayName: string;
+  readonly outputExtension: string;  // '.mdr', '.xml', '.flo'
+  readonly version: string;
+
+  /** YAML Scenario → プラットフォーム形式 */
+  convert(scenario: Scenario): Promise<ConvertResult>;
+
+  /** プラットフォーム形式 → YAML Scenario（省略可） */
+  importFrom?(input: Buffer, filename: string): Promise<ImportResult>;
+}
+
+interface ConvertResult {
+  content: Buffer;   // 出力ファイルの内容
+  filename: string;  // 推奨ファイル名（例: morning-routine_v1.mdr）
+  warnings: string[];
+}
+```
+
+### 3.2 変換器の種別
+
+| 種別 | 格納場所 | 説明 |
+|------|---------|------|
+| 組み込み | `packages/converter/src/converters/{platform}/` | MacroDroid（v1 実装） |
+| ユーザー定義 | `converters/{platform}/index.ts` | 動的ロード（require 不要、置くだけ） |
+| AI 生成 | `tools/create-converter.ts` で生成 | Claude API が実装コードを生成 |
+
+### 3.3 ConverterRegistry
+
+```typescript
+class ConverterRegistry {
+  register(converter: PlatformConverter): void;
+  get(platformId: string): PlatformConverter | undefined;
+  list(): PlatformConverter[];
+  /** converters/ ディレクトリからユーザー定義変換器を動的ロード */
+  loadFromDirectory(dir: string): Promise<{ loaded: string[]; errors: string[] }>;
+}
+```
+
+起動時に `packages/converter/src/converters/` の組み込み変換器を登録し、
+続けてルートの `converters/` からユーザー定義変換器を動的ロードする。
+
+### 3.4 変換成果物（dist/）の Git 管理
+
+```
+dist/
+└── macrodroid/
+    ├── morning-routine_v1.mdr
+    └── system-health-check_v1.mdr
+```
+
+- YAML がソース（`scenarios/*.yaml`）、`dist/` が生成物
+- `npm run build:scenarios` で全 YAML を変換して `dist/` を更新
+- `dist/` は Git にコミットして変更差分を追跡可能にする
+- デプロイ時は `dist/` の変換済みファイルを使う（再変換不要）
+
+`.gitignore` で除外するのは `packages/*/dist/`（TypeScript ビルド成果物）のみ。
+シナリオ `dist/` は除外しない。
+
+### 3.5 Claude API 変換器生成ツール
+
+```bash
+# Tasker 向け変換器を AI に生成させる例
+tsx tools/create-converter.ts tasker \
+  "Tasker の .xml 形式への変換器。公式ドキュメント: https://tasker.joaoapps.com/..."
+# → packages/converter/src/converters/tasker/index.ts に出力
+```
+
+ツールは以下を Claude API に渡して実装コードを生成する：
+- `PlatformConverter` インターフェース定義
+- `Scenario` 型定義
+- `MacroDroidConverter` の実装例
+- ユーザーが指定したプラットフォームの説明・ドキュメント
+
+---
+
+## 4. デプロイ抽象化設計
 
 複数のデプロイ方式を後から追加できるように、プロバイダーインターフェースで抽象化する。
 
@@ -327,24 +418,54 @@ macros:
 ```
 macrodroid-manager/
 ├── docs/
-│   ├── 01_spec.md              # 本ファイル
-│   ├── 02_tasks.md             # タスク分割
-│   └── 03_adr/                 # アーキテクチャ決定記録
-├── scenarios/                  # シナリオ YAML（Git 管理）
+│   ├── 01_spec.md                  # 仕様書
+│   ├── 02_tasks.md                 # タスク分割
+│   ├── 03_mdr_format.md            # .mdr フォーマット解析
+│   ├── 04_converter_guide.md       # 変換器作成ガイド
+│   └── 05_phone_setup.md           # スマホセットアップ手順
+│
+├── scenarios/                      # YAML ソース（Git 管理）
 │   ├── morning-routine.yaml
 │   └── system-health-check.yaml
-├── scripts/                    # Termux スクリプト（Git 管理）
-│   ├── health_check.sh
-│   └── backup.sh
-├── exports/                    # MacroDroid からエクスポートされた YAML
+│
+├── scripts/                        # Termux スクリプト（Git 管理）
+│   └── health_check.sh
+│
+├── dist/                           # ★変換成果物（Git 管理）
+│   └── macrodroid/
+│       └── morning-routine_v1.mdr
+│
+├── converters/                     # ユーザー定義変換器（動的ロード）
+│   └── example/
+│       └── index.ts
+│
+├── exports/                        # スマホからエクスポートされた YAML
 │   └── .gitkeep
-├── app/                        # PC アプリ（TypeScript React）
-│   └── ...
-├── converter/                  # YAML ↔ MacroDroid 変換ライブラリ
-│   └── ...
-├── settings.yaml.example       # 設定ファイルのテンプレート
-├── .gitignore                  # settings.yaml を除外
-└── README.md
+│
+├── tools/                          # CLI ツール
+│   └── create-converter.ts         # Claude API による変換器生成
+│
+├── packages/                       # monorepo パッケージ
+│   ├── converter/                  # 変換ライブラリ
+│   │   └── src/
+│   │       ├── types/
+│   │       │   ├── schema.ts       # YAML 型定義
+│   │       │   ├── mdr.ts          # .mdr 型定義
+│   │       │   └── converter.ts    # PlatformConverter インターフェース
+│   │       ├── converters/
+│   │       │   └── macrodroid/     # 組み込み MacroDroid 変換器
+│   │       ├── registry.ts         # ConverterRegistry
+│   │       ├── build.ts            # buildScenarios 関数
+│   │       ├── validator.ts        # zod バリデーター
+│   │       ├── yaml-to-mdr.ts      # MacroDroid 変換ロジック
+│   │       └── mdr-to-yaml.ts      # MacroDroid 逆変換ロジック
+│   ├── providers/                  # DeployProvider 実装
+│   └── app/                        # Electron アプリ
+│
+├── package.json                    # npm workspaces
+├── tsconfig.base.json
+├── settings.yaml.example           # 設定テンプレート（Git 管理）
+└── .gitignore                      # settings.yaml, packages/*/dist/ を除外
 ```
 
 ### 5.2 クラウドストレージ構造
@@ -452,18 +573,19 @@ MacroDroid の .mdr ファイルは **ZIP アーカイブ**で、内部に `macr
 
 ### 8.1 技術スタック
 
-| 項目 | 選択 | 理由 |
+| 項目 | 選択 | 備考 |
 |------|------|------|
-| フレームワーク | React + TypeScript | 指定 |
-| ビルドツール | Vite | 高速な開発体験 |
+| フレームワーク | Electron + React + TypeScript | **確定** |
+| ビルドツール | electron-vite | Electron + Vite 統合 |
 | UI コンポーネント | shadcn/ui | 軽量・カスタマイズ容易 |
 | YAML パーサー | js-yaml | メジャー・型対応 |
 | コードエディタ | Monaco Editor | YAML/Shell 編集用 |
-| ファイル操作 | Node.js fs API（Electron）または Web File API | デスクトップ前提なら Electron |
-| クラウド API | Dropbox SDK / Google Drive API |  |
-| ZIPファイル操作 | JSZip | .mdr の作成・展開 |
-
-> **オープン**: Web アプリ（ブラウザ）か Electron（デスクトップ）かの選択が必要。ローカル Git リポジトリへのアクセスを考えると **Electron** が自然。
+| ファイル操作 | Node.js fs API（Electron main process） | |
+| バリデーション | zod | スキーマバリデーション |
+| クラウド API | Dropbox SDK for JavaScript | **確定**（Google Drive は将来対応） |
+| ZIP ファイル操作 | JSZip | .mdr の作成・展開 |
+| AI コード生成 | @anthropic-ai/sdk | 変換器生成ツール用 |
+| スクリプト実行 | tsx | TypeScript CLI ツール実行 |
 
 ### 8.2 画面構成（概要）
 
