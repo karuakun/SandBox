@@ -11,7 +11,7 @@
 
 ```
 Phase 0: 調査・検証        ✅ T0-3, T0-4 完了。T0-1, T0-2 は実機必須
-Phase 1: 基盤実装          🔄 T1-1〜T1-7 完了。T1-8〜T1-22 追加（含テスト）
+Phase 1: 基盤実装          🔄 T1-1〜T1-16, T1-19 完了。T1-17, T1-18, T1-20〜T1-22 残り
 Phase 2: PC アプリ実装     ⬜ 未着手
 Phase 3: スマホ連携整備    ⬜ 未着手
 Phase 4: ビジュアルエディタ ⬜ 将来タスク（スコープ外）
@@ -113,7 +113,7 @@ zod による全スキーマバリデーション。日本語エラーメッセ�
 
 ---
 
-### T1-8: PlatformConverter インターフェース + ConverterRegistry 実装 ⬜
+### T1-8: PlatformConverter インターフェース + ConverterRegistry 実装 ✅
 
 **目的**: 変換器の抽象化。Tasker 等の将来対応・ユーザー定義変換器を可能にする。
 
@@ -137,7 +137,7 @@ ConverterRegistry は `converters/` ディレクトリから動的ロードに�
 
 ---
 
-### T1-9: MacroDroidConverter クラスへリファクタリング ⬜
+### T1-9: MacroDroidConverter クラスへリファクタリング ✅
 
 **目的**: 既存の yaml-to-mdr.ts / mdr-to-yaml.ts を PlatformConverter として包む。
 
@@ -150,7 +150,7 @@ ConverterRegistry は `converters/` ディレクトリから動的ロードに�
 
 ---
 
-### T1-10: buildScenarios コマンド + dist/ Git 管理セットアップ ⬜
+### T1-10: buildScenarios コマンド + dist/ Git 管理セットアップ ✅
 
 **目的**: `scenarios/*.yaml` → `dist/{platform}/*.ext` の一括変換コマンドを作る。
 
@@ -167,7 +167,7 @@ ConverterRegistry は `converters/` ディレクトリから動的ロードに�
 
 ---
 
-### T1-11: ユーザー定義変換器サンプル + 動的ロード ⬜
+### T1-11: ユーザー定義変換器サンプル + 動的ロード ✅
 
 **目的**: ユーザーが自分で変換器を作れることを実証する。
 
@@ -189,7 +189,7 @@ export default class ExampleConverter implements PlatformConverter {
 
 ---
 
-### T1-12: Claude API 変換器生成ツール実装 ⬜
+### T1-12: Claude API 変換器生成ツール実装 ✅
 
 **目的**: 自然言語の説明からプラットフォーム変換器の TypeScript コードを AI 生成する。
 
@@ -233,7 +233,7 @@ tsx tools/create-converter.ts tasker \
 
 ---
 
-### T1-13: テスト環境セットアップ ⬜
+### T1-13: テスト環境セットアップ ✅
 
 **依存**: なし（T1-13 は他テストタスクすべての前提）
 
@@ -264,7 +264,7 @@ export default defineConfig({
 
 ---
 
-### T1-14: validator 単体テスト ⬜
+### T1-14: validator 単体テスト ✅
 
 **依存**: T1-13、T1-3（実装済み）  
 **成果物**: `packages/converter/src/__tests__/validator.test.ts`
@@ -282,7 +282,7 @@ export default defineConfig({
 
 ---
 
-### T1-15: yaml-to-mdr 単体テスト ⬜
+### T1-15: yaml-to-mdr 単体テスト ✅
 
 **依存**: T1-13、T1-4（実装済み）  
 **成果物**: `packages/converter/src/__tests__/yaml-to-mdr.test.ts`
@@ -302,7 +302,7 @@ export default defineConfig({
 
 ---
 
-### T1-16: mdr-to-yaml 単体テスト ⬜
+### T1-16: mdr-to-yaml 単体テスト ✅
 
 **依存**: T1-13、T1-5（実装済み）  
 **成果物**: `packages/converter/src/__tests__/mdr-to-yaml.test.ts`
@@ -349,7 +349,7 @@ export default defineConfig({
 
 ---
 
-### T1-19: DropboxProvider 単体テスト ⬜
+### T1-19: DropboxProvider 単体テスト ✅
 
 **依存**: T1-13、T1-7（実装済み）  
 **成果物**: `packages/providers/src/__tests__/dropbox-provider.test.ts`
@@ -648,18 +648,18 @@ T1-8〜T1-22 完了
 | T1-5 | 実装 | ✅ 完了 | | 2026-05-02 |
 | T1-6 | 実装 | ✅ 完了 | | 2026-05-02 |
 | T1-7 | 実装 | ✅ 完了 | | 2026-05-02 |
-| T1-8 | 実装 | ⬜ 未着手 | | |
-| T1-9 | 実装 | ⬜ 未着手 | | |
-| T1-10 | 実装 | ⬜ 未着手 | | |
-| T1-11 | 実装 | ⬜ 未着手 | | |
-| T1-12 | 実装 | ⬜ 未着手 | | |
-| T1-13 | テスト | ⬜ 未着手 | | |
-| T1-14 | 単体テスト | ⬜ 未着手 | | |
-| T1-15 | 単体テスト | ⬜ 未着手 | | |
-| T1-16 | 単体テスト | ⬜ 未着手 | | |
+| T1-8 | 実装 | ✅ 完了 | | 2026-05-03 |
+| T1-9 | 実装 | ✅ 完了 | | 2026-05-03 |
+| T1-10 | 実装 | ✅ 完了 | | 2026-05-03 |
+| T1-11 | 実装 | ✅ 完了 | | 2026-05-03 |
+| T1-12 | 実装 | ✅ 完了 | | 2026-05-03 |
+| T1-13 | テスト | ✅ 完了 | | 2026-05-03 |
+| T1-14 | 単体テスト | ✅ 完了 | | 2026-05-03 |
+| T1-15 | 単体テスト | ✅ 完了 | | 2026-05-03 |
+| T1-16 | 単体テスト | ✅ 完了 | | 2026-05-03 |
 | T1-17 | 単体テスト | ⬜ 未着手（T1-9 後） | | |
 | T1-18 | 単体テスト | ⬜ 未着手（T1-8 後） | | |
-| T1-19 | 単体テスト | ⬜ 未着手 | | |
+| T1-19 | 単体テスト | ✅ 完了 | | 2026-05-03 |
 | T1-20 | 結合テスト | ⬜ 未着手（T1-9 後） | | |
 | T1-21 | 結合テスト | ⬜ 未着手（T1-10 後） | | |
 | T1-22 | 結合テスト | ⬜ 未着手（T1-11 後） | | |

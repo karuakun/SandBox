@@ -7,11 +7,16 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
+    "build:scenarios": "tsx tools/build-scenarios.ts",
     "dev": "npm run dev --workspace=packages/app",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
+    "tsx": "^4.7.0",
     "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0"
   }
 }
