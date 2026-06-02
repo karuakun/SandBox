@@ -1,0 +1,36 @@
+apiVersion: macrodroid/v1
+kind: Scenario
+metadata:
+  id: morning-routine
+  name: 朝のルーティン
+  description: 平日の朝に自動実行する一連の自動化
+  tags:
+    - morning
+    - weekday
+  version: 1
+  createdAt: 2026-05-02
+  updatedAt: 2026-05-02
+
+macros:
+  - id: wake-up-wifi
+    name: 朝のWi-Fi有効化
+    enabled: true
+    category: 朝のルーティン
+    trigger:
+      type: time
+      config:
+        time: "07:00"
+        days: [mon, tue, wed, thu, fri]
+    conditions:
+      - type: battery_level
+        config:
+          operator: gte
+          value: 20
+    actions:
+      - type: wifi
+        config:
+          state: enable
+      - type: notification
+        config:
+          title: おはよう
+          text: Wi-Fiを有効にしました

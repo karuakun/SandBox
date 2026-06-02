@@ -1,0 +1,667 @@
+# MacroDroid Automation Manager 仕様書
+
+**バージョン**: 0.3.0  
+**作成日**: 2026-05-02  
+**更新日**: 2026-05-02  
+**ステータス**: 確定（変換器抽象化・dist管理・AI生成ツールを追加）
+
+---
+
+## 1. プロジェクト概要
+
+### 1.1 目的
+
+Android の自動化アプリ MacroDroid の自動化タスク（マクロ）を、PC 側の TypeScript React アプリで設計・管理し、スマートフォンへデプロイする仕組みを構築する。
+
+単純な MacroDroid アクションに加え、Termux スクリプトを組み合わせた高度なワークフローも同一の管理基盤で扱えるようにする。
+
+### 1.2 スコープ
+
+| 機能 | 説明 |
+|------|------|
+| シナリオ定義 | YAML でプラットフォーム非依存のマクロ群を定義 |
+| シナリオ管理 | 一覧表示・追加・編集・削除（PC 管理画面） |
+| スクリプト管理 | Termux スクリプトを Git で一元管理 |
+| 変換成果物管理 | YAML → 各プラットフォーム形式に変換した成果物を `dist/` で Git 管理 |
+| デプロイ | `dist/` の変換済みファイルをスマホへ配信（DeployProvider 経由） |
+| エクスポート | スマホ上の既存マクロを PC 側の YAML に取り込む |
+| 変換器拡張 | `PlatformConverter` インターフェースを実装してプラットフォームを追加 |
+| ユーザー定義変換器 | `converters/` ディレクトリに置くだけで動的にロード |
+| AI 変換器生成 | Claude API を使った変換器コード生成ツール |
+
+**スコープ外（将来タスク）**
+
+- ビジュアルワークフローエディタ（GUI でのフロー作成）
+- 複数端末の同時管理
+
+### 1.3 前提条件
+
+| 項目 | 内容 |
+|------|------|
+| Android | MacroDroid Pro インストール済み |
+| Android | Termux インストール済み（高度なワークフロー使用時） |
+| Android | クラウドストレージアプリ（Dropbox または Google Drive）インストール済み |
+| PC | Node.js 環境 |
+| PC | Git 環境 |
+| クラウド | Dropbox または Google Drive アカウント |
+
+---
+
+## 2. システムアーキテクチャ
+
+### 2.1 全体構成図
+
+```
+┌─────────────────────────────────────────────┐
+│  PC                                         │
+│                                             │
+│  ┌──────────────────────────────────────┐   │
+│  │  MacroDroid Manager App (React)      │   │
+│  │  ・シナリオ管理画面                  │   │
+│  │  ・YAML エディタ                     │   │
+│  │  ・デプロイ操作                      │   │
+│  └──────────┬───────────────────────────┘   │
+│             │                               │
+│  ┌──────────▼───────────────────────────┐   │
+│  │  ローカル Git リポジトリ             │   │
+│  │  scenarios/*.yaml                    │   │
+│  │  scripts/*.sh                        │   │
+│  └──────────┬───────────────────────────┘   │
+│             │ deploy / export               │
+│  ┌──────────▼───────────────────────────┐   │
+│  │  Deploy Provider (抽象化)            │   │
+│  │  └─ CloudStorageProvider             │   │
+│  │     （Dropbox / Google Drive）       │   │
+│  └──────────┬───────────────────────────┘   │
+└────────────-│────────────────────────────────┘
+              │ クラウド同期
+┌─────────────▼───────────────────────────────┐
+│  クラウドストレージ                          │
+│  MacroDroidManager/                         │
+│  ├── deploy/      PC → スマホ               │
+│  │   ├── *.mdr    マクロ定義                │
+│  │   └── *.sh     Termux スクリプト         │
+│  └── export/      スマホ → PC              │
+│      └── *.mdr    エクスポートされたマクロ  │
+└─────────────┬───────────────────────────────┘
+              │ クラウドアプリ自動同期
+┌─────────────▼───────────────────────────────┐
+│  Android スマートフォン                      │
+│                                             │
+│  ┌───────────────────┐  ┌────────────────┐  │
+│  │  MacroDroid Pro   │  │  Termux        │  │
+│  │  ・マクロ実行     │  │  ・スクリプト  │  │
+│  │  ・受信マクロ     │  │    実行環境    │  │
+│  │  ・ファイル監視   │  │               │  │
+│  └───────────────────┘  └────────────────┘  │
+│                                             │
+│  ┌───────────────────────────────────────┐  │
+│  │  クラウドストレージ ローカル同期フォルダ│  │
+│  └───────────────────────────────────────┘  │
+└─────────────────────────────────────────────┘
+```
+
+### 2.2 コンポーネント一覧
+
+| コンポーネント | 役割 | 技術 |
+|----------------|------|------|
+| Manager App | PC 側管理 UI | TypeScript / React / Electron |
+| PlatformConverter | YAML → プラットフォーム形式変換の抽象 | TypeScript Interface |
+| MacroDroidConverter | MacroDroid 組み込みコンバーター | TypeScript |
+| ConverterRegistry | 変換器の登録・動的ロード管理 | TypeScript |
+| build:scenarios | YAML → dist/ 変換バッチコマンド | Node.js script |
+| create-converter | Claude API による変換器コード生成 | Anthropic SDK |
+| Deploy Provider | デプロイ方式の抽象インターフェース | TypeScript Interface |
+| DropboxProvider | Dropbox へのファイル操作 | Dropbox SDK |
+| Receiver Macro | スマホ側のファイル監視・インポート起動 | MacroDroid |
+| Script Installer | Termux スクリプト配置 | MacroDroid + Shell |
+
+---
+
+## 3. 変換器抽象化設計（PlatformConverter）
+
+YAML シナリオから各プラットフォーム固有形式への変換を抽象化する。
+MacroDroid 以外のプラットフォーム（Tasker 等）への対応をインターフェース実装で追加できる。
+
+### 3.1 PlatformConverter インターフェース
+
+```typescript
+interface PlatformConverter {
+  readonly platformId: string;       // 'macrodroid', 'tasker', 'automate'
+  readonly displayName: string;
+  readonly outputExtension: string;  // '.mdr', '.xml', '.flo'
+  readonly version: string;
+
+  /** YAML Scenario → プラットフォーム形式 */
+  convert(scenario: Scenario): Promise<ConvertResult>;
+
+  /** プラットフォーム形式 → YAML Scenario（省略可） */
+  importFrom?(input: Buffer, filename: string): Promise<ImportResult>;
+}
+
+interface ConvertResult {
+  content: Buffer;   // 出力ファイルの内容
+  filename: string;  // 推奨ファイル名（例: morning-routine_v1.mdr）
+  warnings: string[];
+}
+```
+
+### 3.2 変換器の種別
+
+| 種別 | 格納場所 | 説明 |
+|------|---------|------|
+| 組み込み | `packages/converter/src/converters/{platform}/` | MacroDroid（v1 実装） |
+| ユーザー定義 | `converters/{platform}/index.ts` | 動的ロード（require 不要、置くだけ） |
+| AI 生成 | `tools/create-converter.ts` で生成 | Claude API が実装コードを生成 |
+
+### 3.3 ConverterRegistry
+
+```typescript
+class ConverterRegistry {
+  register(converter: PlatformConverter): void;
+  get(platformId: string): PlatformConverter | undefined;
+  list(): PlatformConverter[];
+  /** converters/ ディレクトリからユーザー定義変換器を動的ロード */
+  loadFromDirectory(dir: string): Promise<{ loaded: string[]; errors: string[] }>;
+}
+```
+
+起動時に `packages/converter/src/converters/` の組み込み変換器を登録し、
+続けてルートの `converters/` からユーザー定義変換器を動的ロードする。
+
+### 3.4 変換成果物（dist/）の Git 管理
+
+```
+dist/
+└── macrodroid/
+    ├── morning-routine_v1.mdr
+    └── system-health-check_v1.mdr
+```
+
+- YAML がソース（`scenarios/*.yaml`）、`dist/` が生成物
+- `npm run build:scenarios` で全 YAML を変換して `dist/` を更新
+- `dist/` は Git にコミットして変更差分を追跡可能にする
+- デプロイ時は `dist/` の変換済みファイルを使う（再変換不要）
+
+`.gitignore` で除外するのは `packages/*/dist/`（TypeScript ビルド成果物）のみ。
+シナリオ `dist/` は除外しない。
+
+### 3.5 Claude API 変換器生成ツール
+
+```bash
+# Tasker 向け変換器を AI に生成させる例
+tsx tools/create-converter.ts tasker \
+  "Tasker の .xml 形式への変換器。公式ドキュメント: https://tasker.joaoapps.com/..."
+# → packages/converter/src/converters/tasker/index.ts に出力
+```
+
+ツールは以下を Claude API に渡して実装コードを生成する：
+- `PlatformConverter` インターフェース定義
+- `Scenario` 型定義
+- `MacroDroidConverter` の実装例
+- ユーザーが指定したプラットフォームの説明・ドキュメント
+
+---
+
+## 4. デプロイ抽象化設計
+
+複数のデプロイ方式を後から追加できるように、プロバイダーインターフェースで抽象化する。
+
+### 3.1 DeployProvider インターフェース
+
+```typescript
+interface DeployProvider {
+  /** シナリオ（.mdr ファイル）をデプロイ先に送信 */
+  deployScenario(scenario: Scenario, mdrContent: Buffer): Promise<void>;
+
+  /** Termux スクリプトをデプロイ先に送信 */
+  deployScript(scriptName: string, content: string): Promise<void>;
+
+  /** デプロイ先からエクスポートされた .mdr ファイルを受信 */
+  listExports(): Promise<ExportEntry[]>;
+  fetchExport(entry: ExportEntry): Promise<Buffer>;
+
+  /** 接続テスト */
+  testConnection(): Promise<boolean>;
+}
+```
+
+### 3.2 実装プロバイダー
+
+| プロバイダー | 状態 | 説明 |
+|-------------|------|------|
+| `DropboxProvider` | v1 実装対象 | Dropbox API v2 を使用 |
+| `GoogleDriveProvider` | 将来追加 | Google Drive API v3 を使用 |
+| `LocalNetworkProvider` | 将来追加 | LAN 内 HTTP サーバー経由 |
+| `AdbProvider` | 将来追加 | ADB 経由で直接転送 |
+
+### 3.3 プロバイダー設定
+
+`settings.yaml`（リポジトリ管理外、`.gitignore` 対象）にプロバイダーと認証情報を記述する。
+
+```yaml
+deploy:
+  provider: dropbox          # dropbox | gdrive | local | adb
+  dropbox:
+    accessToken: "..."
+    basePath: "/MacroDroidManager"
+  # gdrive:
+  #   credentialsFile: "./credentials.json"
+  #   basePath: "MacroDroidManager"
+```
+
+---
+
+## 4. シナリオ YAML スキーマ
+
+シナリオは複数のマクロをまとめた管理単位。1 ファイル = 1 シナリオ。
+
+### 4.1 シナリオ基本構造
+
+```yaml
+apiVersion: macrodroid/v1
+kind: Scenario
+metadata:
+  id: morning-routine          # 一意な識別子（ファイル名と一致させる）
+  name: 朝のルーティン
+  description: 平日の朝に実行する一連の自動化
+  tags:
+    - morning
+    - weekday
+  version: 3
+  createdAt: 2026-05-01
+  updatedAt: 2026-05-02
+
+macros:
+  - ...                        # マクロ定義（後述）
+```
+
+### 4.2 マクロ定義
+
+```yaml
+macros:
+  - id: wake-up-wifi           # シナリオ内で一意
+    name: 朝のWi-Fi有効化
+    enabled: true
+    category: 朝のルーティン   # MacroDroid のカテゴリ
+    trigger:
+      type: time
+      config:
+        time: "07:00"
+        days: [mon, tue, wed, thu, fri]
+    conditions:
+      - type: battery_level
+        config:
+          operator: gte
+          value: 20
+    actions:
+      - type: wifi
+        config:
+          state: enable
+      - type: notification
+        config:
+          title: おはよう
+          text: Wi-Fiを有効にしました
+```
+
+### 4.3 トリガー定義
+
+| type | 説明 | config キー |
+|------|------|-------------|
+| `time` | 指定時刻 | `time` (HH:mm), `days` |
+| `interval` | 定期実行 | `interval_minutes` |
+| `location_enter` | エリア進入 | `lat`, `lng`, `radius_m` |
+| `location_exit` | エリア退出 | `lat`, `lng`, `radius_m` |
+| `wifi_connected` | Wi-Fi 接続 | `ssid`（省略可） |
+| `wifi_disconnected` | Wi-Fi 切断 | `ssid`（省略可） |
+| `screen_on` | 画面点灯 | ー |
+| `screen_off` | 画面消灯 | ー |
+| `battery_level` | バッテリー到達 | `level`, `direction` (above/below) |
+| `webhook` | Webhook 受信 | `identifier` |
+| `notification_received` | 通知受信 | `app_package` |
+| `file_modified` | ファイル変更 | `path` |
+| `app_launched` | アプリ起動 | `package_name` |
+
+### 4.4 アクション定義
+
+| type | 説明 | config キー |
+|------|------|-------------|
+| `notification` | 通知表示 | `title`, `text`, `priority` |
+| `toast` | トースト表示 | `text` |
+| `wifi` | Wi-Fi 制御 | `state` (enable/disable/toggle) |
+| `bluetooth` | BT 制御 | `state` |
+| `volume` | 音量設定 | `stream`, `level` |
+| `launch_app` | アプリ起動 | `package_name` |
+| `http_request` | HTTP リクエスト | `method`, `url`, `body`, `headers` |
+| `termux_script` | Termux スクリプト実行 | `script`, `args`, `wait_for_result` |
+| `set_variable` | 変数設定 | `name`, `value` |
+| `if_else` | 条件分岐 | `condition`, `then_actions`, `else_actions` |
+| `wait` | 待機 | `duration_ms` |
+| `speak_text` | 音声読み上げ | `text` |
+
+### 4.5 条件定義
+
+| type | 説明 | config キー |
+|------|------|-------------|
+| `time_range` | 時間帯 | `from`, `to` |
+| `day_of_week` | 曜日 | `days` |
+| `battery_level` | バッテリー残量 | `operator`, `value` |
+| `wifi_connected` | Wi-Fi 接続中 | `ssid`（省略可） |
+| `screen_on` | 画面点灯中 | ー |
+| `variable` | 変数値比較 | `name`, `operator`, `value` |
+
+### 4.6 Termux スクリプト統合
+
+```yaml
+actions:
+  - type: termux_script
+    config:
+      script: scripts/health_check.sh   # scripts/ 以下の相対パス（Git 管理）
+      args: "--verbose --output /tmp/result.txt"
+      wait_for_result: true             # 完了を待つか否か
+      timeout_sec: 30
+```
+
+`script` フィールドはリポジトリ内の `scripts/` ディレクトリへの相対パスで指定する。デプロイ時にスクリプト本体も合わせて配信され、Termux の所定ディレクトリ（`~/macrodroid/`）に配置される。
+
+### 4.7 サンプル：高度なワークフロー（Termux 統合）
+
+```yaml
+apiVersion: macrodroid/v1
+kind: Scenario
+metadata:
+  id: system-health-check
+  name: システムヘルスチェック
+  version: 1
+
+macros:
+  - id: daily-check
+    name: 日次ヘルスチェック
+    enabled: true
+    trigger:
+      type: time
+      config:
+        time: "09:00"
+    actions:
+      - type: termux_script
+        config:
+          script: scripts/health_check.sh
+          wait_for_result: true
+          timeout_sec: 60
+      - type: if_else
+        config:
+          condition:
+            type: variable
+            config:
+              name: termux_exit_code
+              operator: eq
+              value: "0"
+          then_actions:
+            - type: notification
+              config:
+                title: ヘルスチェック
+                text: "正常終了しました"
+          else_actions:
+            - type: http_request
+              config:
+                method: POST
+                url: "https://example.com/alert"
+                body: '{"status": "error"}'
+```
+
+---
+
+## 5. ディレクトリ構造
+
+### 5.1 Git リポジトリ構造
+
+```
+macrodroid-manager/
+├── docs/
+│   ├── 01_spec.md                  # 仕様書
+│   ├── 02_tasks.md                 # タスク分割
+│   ├── 03_mdr_format.md            # .mdr フォーマット解析
+│   ├── 04_converter_guide.md       # 変換器作成ガイド
+│   └── 05_phone_setup.md           # スマホセットアップ手順
+│
+├── scenarios/                      # YAML ソース（Git 管理）
+│   ├── morning-routine.yaml
+│   └── system-health-check.yaml
+│
+├── scripts/                        # Termux スクリプト（Git 管理）
+│   └── health_check.sh
+│
+├── dist/                           # ★変換成果物（Git 管理）
+│   └── macrodroid/
+│       └── morning-routine_v1.mdr
+│
+├── converters/                     # ユーザー定義変換器（動的ロード）
+│   └── example/
+│       └── index.ts
+│
+├── exports/                        # スマホからエクスポートされた YAML
+│   └── .gitkeep
+│
+├── tools/                          # CLI ツール
+│   └── create-converter.ts         # Claude API による変換器生成
+│
+├── packages/                       # monorepo パッケージ
+│   ├── converter/                  # 変換ライブラリ
+│   │   └── src/
+│   │       ├── types/
+│   │       │   ├── schema.ts       # YAML 型定義
+│   │       │   ├── mdr.ts          # .mdr 型定義
+│   │       │   └── converter.ts    # PlatformConverter インターフェース
+│   │       ├── converters/
+│   │       │   └── macrodroid/     # 組み込み MacroDroid 変換器
+│   │       ├── registry.ts         # ConverterRegistry
+│   │       ├── build.ts            # buildScenarios 関数
+│   │       ├── validator.ts        # zod バリデーター
+│   │       ├── yaml-to-mdr.ts      # MacroDroid 変換ロジック
+│   │       └── mdr-to-yaml.ts      # MacroDroid 逆変換ロジック
+│   ├── providers/                  # DeployProvider 実装
+│   └── app/                        # Electron アプリ
+│
+├── package.json                    # npm workspaces
+├── tsconfig.base.json
+├── settings.yaml.example           # 設定テンプレート（Git 管理）
+└── .gitignore                      # settings.yaml, packages/*/dist/ を除外
+```
+
+### 5.2 クラウドストレージ構造
+
+```
+CloudStorage/
+└── MacroDroidManager/
+    ├── deploy/                 # PC → スマホ
+    │   ├── scenarios/
+    │   │   └── {id}_{version}.mdr
+    │   └── scripts/
+    │       └── health_check.sh
+    └── export/                 # スマホ → PC
+        └── {timestamp}_{name}.mdr
+```
+
+---
+
+## 6. デプロイフロー
+
+### 6.1 PC → スマホ（シナリオデプロイ）
+
+```
+1. ユーザーが PC アプリでシナリオを選択して「デプロイ」
+2. YAML → .mdr 変換（Converter）
+3. Deploy Provider が .mdr + 関連スクリプトをクラウドストレージにアップロード
+4. クラウドストレージアプリがスマホにファイルを同期
+5. MacroDroid の「ファイル変更」トリガーが起動（事前セットアップ必要）
+6. MacroDroid が .mdr ファイルをインポート
+7. Termux スクリプトを所定のディレクトリにコピー
+```
+
+**スマホ側 セットアップマクロ（初回のみ手動設定）**
+
+| # | 要素 | 内容 |
+|---|------|------|
+| トリガー | ファイル変更 | クラウド同期フォルダ内の `deploy/scenarios/` を監視 |
+| アクション1 | マクロインポート | 変更されたファイルをインポート |
+| アクション2 | Shell スクリプト | `deploy/scripts/` のファイルを `~/macrodroid/` にコピー |
+
+> **注意**: MacroDroid のマクロインポートをプログラム的にトリガーする方法は実装フェーズで検証が必要。
+
+### 6.2 スマホ → PC（エクスポート）
+
+```
+1. MacroDroid アプリから対象マクロを手動エクスポート
+   → クラウドストレージの export/ フォルダに保存
+2. クラウドストレージが PC に同期
+3. PC アプリがエクスポートフォルダを監視し、新規 .mdr を検知
+4. .mdr → YAML 変換（Converter）
+5. PC アプリの「インポート確認」画面に表示
+6. ユーザーが確認 → scenarios/ に保存
+```
+
+---
+
+## 7. YAML ↔ MacroDroid 変換仕様
+
+### 7.1 .mdr フォーマット
+
+MacroDroid の .mdr ファイルは **ZIP アーカイブ**で、内部に `macros`（JSON、拡張子なし）が含まれる。
+
+```json
+{
+  "macroList": [
+    {
+      "m_GUID": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "m_name": "マクロ名",
+      "m_isEnabled": true,
+      "m_categoryRef": "カテゴリ名",
+      "m_triggerList": [ /* トリガーオブジェクト */ ],
+      "m_conditionList": [ /* 条件オブジェクト */ ],
+      "m_actionList": [ /* アクションオブジェクト */ ]
+    }
+  ],
+  "categoryList": [ /* カテゴリ一覧 */ ],
+  "variableList": [ /* 変数一覧 */ ]
+}
+```
+
+各 trigger / condition / action は MacroDroid 内部のクラス名を持つシリアライズ形式。
+
+### 7.2 変換方針
+
+| 方向 | アプローチ |
+|------|------------|
+| YAML → .mdr | 各 type を MacroDroid 内部クラス構造にマッピングするルールを実装 |
+| .mdr → YAML | 既知クラスを type にマッピング、未知クラスは `raw` として保持 |
+
+### 7.3 変換テーブル（一部）
+
+| YAML type | MacroDroid クラス名（要検証） |
+|-----------|-------------------------------|
+| `time` トリガー | `MacroDroidTimerTrigger` |
+| `wifi_connected` トリガー | `MacroDroidWifiSSIDTrigger` |
+| `notification` アクション | `MacroDroidNotificationAction` |
+| `wifi` アクション | `MacroDroidWifiAction` |
+| `termux_script` アクション | `MacroDroidRunScriptAction` |
+
+> **要検証**: 実際の MacroDroid .mdr を複数エクスポートして内部クラス名と JSON 構造をリバースエンジニアリングする作業が必要。これは実装フェーズの最初のタスク。
+
+---
+
+## 8. PC アプリ仕様
+
+### 8.1 技術スタック
+
+| 項目 | 選択 | 備考 |
+|------|------|------|
+| フレームワーク | Electron + React + TypeScript | **確定** |
+| ビルドツール | electron-vite | Electron + Vite 統合 |
+| UI コンポーネント | shadcn/ui | 軽量・カスタマイズ容易 |
+| YAML パーサー | js-yaml | メジャー・型対応 |
+| コードエディタ | Monaco Editor | YAML/Shell 編集用 |
+| ファイル操作 | Node.js fs API（Electron main process） | |
+| バリデーション | zod | スキーマバリデーション |
+| クラウド API | Dropbox SDK for JavaScript | **確定**（Google Drive は将来対応） |
+| ZIP ファイル操作 | JSZip | .mdr の作成・展開 |
+| AI コード生成 | @anthropic-ai/sdk | 変換器生成ツール用 |
+| スクリプト実行 | tsx | TypeScript CLI ツール実行 |
+
+### 8.2 画面構成（概要）
+
+```
+┌─────────────────────────────────────────────────┐
+│  MacroDroid Manager                             │
+├──────────┬──────────────────────────────────────┤
+│          │  [ メインコンテンツ ]                │
+│ サイドバー│                                     │
+│          │                                      │
+│ Scenarios│                                      │
+│ > 朝のルー│                                     │
+│   ティン │                                      │
+│ > システム│                                     │
+│   ヘルス │                                      │
+│          │                                      │
+│ Scripts  │                                      │
+│ > health │                                      │
+│   _check │                                      │
+│          │                                      │
+│ Exports  │                                      │
+│          │                                      │
+│ Settings │                                      │
+└──────────┴──────────────────────────────────────┘
+```
+
+| 画面 | 主な機能 |
+|------|----------|
+| シナリオ一覧 | 一覧表示・有効/無効切替・デプロイ・削除 |
+| シナリオ詳細/編集 | YAML エディタ（Monaco）・バリデーション |
+| シナリオ新規作成 | テンプレート選択 → YAML 生成 |
+| スクリプト管理 | スクリプト一覧・エディタ（Shell 構文ハイライト） |
+| エクスポート管理 | 受信した .mdr の確認・YAML 変換・保存 |
+| 設定 | プロバイダー選択・認証情報設定・接続テスト |
+
+---
+
+## 9. スマホ側セットアップ
+
+### 9.1 MacroDroid セットアップ
+
+1. MacroDroid Pro インストール
+2. クラウドストレージアプリをインストールし、`MacroDroidManager/` フォルダを同期設定
+3. **受信マクロ**（手動作成）：
+   - トリガー: `deploy/scenarios/` フォルダのファイル変更を監視
+   - アクション: .mdr ファイルのインポート + スクリプトのコピー
+4. **エクスポートマクロ**（手動作成、オプション）：
+   - アクション: 指定マクロを `export/` フォルダに .mdr として保存
+
+### 9.2 Termux セットアップ
+
+1. Termux インストール
+2. Termux:Tasker プラグインインストール（MacroDroid との連携に必要）
+3. スクリプト格納ディレクトリ作成: `mkdir -p ~/macrodroid`
+
+---
+
+## 10. オープン事項・リスク
+
+| # | 事項 | 優先度 | 対応方針 |
+|---|------|--------|----------|
+| 1 | MacroDroid .mdr の正確な内部フォーマット（フィールド名・Termux アクション） | 高 | T0-1: 実機エクスポートで確認（`docs/03_mdr_format.md` に検証チェックリスト記載） |
+| 2 | MacroDroid でのプログラム的マクロインポート手段 | 高 | T0-2: `android.intent.action.VIEW` で .mdr を開けるか検証 |
+| 3 | Termux スクリプトのデプロイ先パス権限 | 低 | テスト時に確認 |
+
+---
+
+## 11. 確定事項
+
+| 項目 | 決定内容 | 決定日 |
+|------|---------|--------|
+| PC アプリ形態 | **Electron**（electron-vite + React） | 2026-05-02 |
+| 初期 DeployProvider | **Dropbox**（Dropbox SDK for JavaScript） | 2026-05-02 |
+| .mdr フォーマット（既知部分） | JSON + `m_classType` によるクラス識別。詳細は `docs/03_mdr_format.md` 参照 | 2026-05-02 |
+
+## 12. 未決定事項
+
+- [ ] マクロの `m_GUID` 採番方針（整数乱数 vs タイムスタンプ）
+- [ ] YAML バリデーションの厳格度（未知の `type` を警告のみにするか、エラーにするか）
